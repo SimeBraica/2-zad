@@ -1,0 +1,59 @@
+﻿@using Microsoft.Extensions.Options
+@using System.Text.Json
+
+@page "/pets/{id:int}"
+<PageTitle>Pets with non auth</PageTitle>
+
+Enable xss:
+<input type="checkbox" @bind="xssEnabled" />
+
+<h3>Pets</h3>
+
+<input type="text" @bind="UserInput" placeholder="Enter some text" />
+<button @onclick="DisplayInput">Submit</button>
+
+@if(xssEnabled){
+    <div>
+        @((MarkupString)UserInput)
+    </div>
+}
+<div>
+    @(UserInput)
+</div>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Pet Name</th>
+            <th>Animal</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var pet in pets) {
+            <tr>
+                <td>@pet.PetName</td>
+                <td>@pet.Animal</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Inject] private HttpClient HttpClient { get; set; }
+    [Inject] private PetService _petService { get; set; }
+
+    List<PetDTO> pets = new();
+    [Parameter] public int id { get; set; }
+    public bool xssEnabled { get; set; } = false;
+
+    public string UserInput { get; set; } = "";
+
+    private void DisplayInput() {
+        Console.WriteLine(UserInput);
+    }
+
+    protected override async Task OnInitializedAsync() {
+        Console.WriteLine("ja sam unutar pets ");
+        pets = await _petService.GetPetsNotAuth(id);
+    }
+}

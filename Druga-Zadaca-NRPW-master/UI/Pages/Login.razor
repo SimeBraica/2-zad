@@ -1,0 +1,102 @@
+﻿@using Microsoft.Extensions.Options
+@using System.Text.Json
+@page "/"
+<PageTitle>Login</PageTitle>
+
+<h3>Login</h3>
+
+<h4>Username:</h4>
+<input type="text" @bind="username" />
+<h4>Password:</h4>
+<input type="password" @bind="password" />
+<button @onclick="LoginUser">Login</button>
+
+SQL Injection:
+<input type="checkbox" @bind="sqlInjection" />
+Broken authentication:
+<input type="checkbox" @bind="brokenAuth" />
+Broken access control:
+<input type="checkbox" @bind="brokenControl" />
+<div>@errorMessage</div>
+
+ <div>
+    @if (brokenAuth == false) {
+        <Captcha @bind="captcha" Solved="Solved" Validate="Validate" Expired="Expired" />
+    }
+</div>
+ 
+@code {
+    public string username { get; set; } = "";
+    public string password { get; set; } = "";
+
+    public bool sqlInjection { get; set; } = false;
+    public bool brokenAuth { get; set; } = false;
+    public bool brokenControl { get; set; } = false;
+
+
+    public string errorMessage { get; set; } = "";
+    private int numberOfWrongLogins { get; set; } = 0;
+
+    private Captcha captcha;
+    private bool captchaCorrect = false;
+
+    [Inject] private HttpClient HttpClient { get; set; }
+    [Inject] private LoginService _loginService { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+    public async Task LoginUser() {
+        if (numberOfWrongLogins >= 3 && !brokenAuth) {
+            errorMessage = "Too many failed attempts. Try again in 1 minute.";
+            Console.WriteLine("Too many login attempts: " + numberOfWrongLogins);
+            await Task.Delay(60000); 
+            return;
+        }
+
+        int loginSuccess = await _loginService.LoginUser(username, password, sqlInjection);
+        Console.WriteLine("kraj mene je login success id korsnika: " + loginSuccess);
+        if (loginSuccess != 0) {
+            errorMessage = "Login successful!";
+            Console.WriteLine("Login successful");
+            numberOfWrongLogins = 0;
+            if (brokenControl && captchaCorrect) {
+                Console.WriteLine("ja sam loginSuccess" + loginSuccess);
+                NavigationManager.NavigateTo($"/pets/{loginSuccess}");
+
+            }
+            if (!brokenControl && captchaCorrect) {
+                NavigationManager.NavigateTo($"/pets-auth");
+            }
+            if (brokenControl && sqlInjection) {
+                Console.WriteLine("ja sam u broken control i sql inj" + loginSuccess);
+                NavigationManager.NavigateTo($"/pets/{loginSuccess}");
+            }
+            if (!brokenControl && sqlInjection) {
+                Console.WriteLine("ja sam ne broken control i sql inj" + loginSuccess);
+                NavigationManager.NavigateTo($"/pets-auth");
+            }
+
+        } 
+        
+        else {
+            errorMessage = "Login failed. Check your credentials and captcha.";
+            Console.WriteLine("Login failed. Attempt #" + numberOfWrongLogins);
+            numberOfWrongLogins++;
+        }
+    }
+
+    private async Task<bool> Validate(CaptchaState captchaResponse) {
+        var result = await HttpClient.PostAsJsonAsync("https://localhost:7128/api/Owner/validate-captcha", new { Response = captchaResponse.Response });
+        if (result.IsSuccessStatusCode) {
+            captchaCorrect = true;
+        }
+        return result.IsSuccessStatusCode;
+    }
+
+    private void Expired() {
+        Console.WriteLine("Captcha expired.");
+    }
+
+    public void Solved() {
+        Console.WriteLine("Captcha solved.");
+    }
+
+}
